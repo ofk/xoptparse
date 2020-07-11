@@ -60,10 +60,10 @@ class XOptionParser < ::OptionParser
     banner = +"#{@banner_usage}#{program_name}"
     banner << " #{@banner_options}" unless no_options
     visit(:add_banner, banner)
-    banner << " #{@banner_command}" unless @commands.empty?
     @arg_stack.flatten(1).each do |sw|
       banner << " #{sw.short.first}"
     end
+    banner << " #{@banner_command}" unless @commands.empty?
     banner << "\n\n#{description}" if description
 
     banner
@@ -208,6 +208,11 @@ class XOptionParser < ::OptionParser
     raise MissingArgument, original_argv.join(' ').to_s if original_argv.size < argv_min
 
     argv_max = rest_req_count ? nil : argv_min + opt_count
+    unless @commands.empty?
+      index = original_argv[argv_min...argv_max].index { |arg| @commands.include?(arg) }
+      argv_max = argv_min + index if index
+    end
+
     argv = original_argv.slice!(0...argv_max)
 
     opt_size = [argv.size - argv_min, opt_count].min

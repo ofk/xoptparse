@@ -238,4 +238,52 @@ class XOptionParserTest < Minitest::Test
     opt = opt.instance_variable_get(:@commands)['sub'].first.call
     assert { opt.help == "Usage: test sub [options]\n\nsub desc\n\nOptions:\n    -u, --uest[=VAL]                 uest desc\n" }
   end
+
+  def test_arguments_and_sub_command
+    create_option_parser = proc do |res|
+      XOptionParser.new do |o|
+        res[:c] = :root
+        o.on('v1') { |v| res[:v1] = v }
+        o.on('[v2]') { |v| res[:v2] = v }
+        o.command('foo') do |o2|
+          res[:c] = :foo
+          o2.on('[v3]') { |v| res[:v3] = v }
+        end
+      end
+    end
+
+    opt = create_option_parser.call({})
+    opt.program_name = 'test'
+    assert { opt.help == "Usage: test v1 [v2] <command>\n\nOptions:\n    v1\n    [v2]\n\nCommands:\n    foo\n" }
+
+    res = {}
+    opt = create_option_parser.call(res)
+    args = opt.parse!(%w[hoge piyo])
+    assert { args.empty? }
+    assert { res == { c: :root, v1: 'hoge', v2: 'piyo' } }
+
+    res = {}
+    opt = create_option_parser.call(res)
+    args = opt.parse!(%w[hoge])
+    assert { args.empty? }
+    assert { res == { c: :root, v1: 'hoge', v2: nil } }
+
+    res = {}
+    opt = create_option_parser.call(res)
+    args = opt.parse!(%w[hoge foo])
+    assert { args.empty? }
+    assert { res == { c: :foo, v1: 'hoge', v2: nil, v3: nil } }
+
+    res = {}
+    opt = create_option_parser.call(res)
+    args = opt.parse!(%w[hoge foo bar])
+    assert { args.empty? }
+    assert { res == { c: :foo, v1: 'hoge', v2: nil, v3: 'bar' } }
+
+    res = {}
+    opt = create_option_parser.call(res)
+    args = opt.parse!(%w[hoge foo bar baz])
+    assert { args == %w[baz] }
+    assert { res == { c: :foo, v1: 'hoge', v2: nil, v3: 'bar' } }
+  end
 end
