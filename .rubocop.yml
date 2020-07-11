@@ -5,6 +5,8 @@ AllCops:
 
 Layout/LineLength:
   Max: 100
+  Exclude:
+    - test/**/*
 
 Metrics/AbcSize:
   Exclude:

@@ -214,4 +214,28 @@ class XOptionParserTest < Minitest::Test
     opt.parse!(%w[80 yes no + - a,b,c])
     assert { res == { port: 80, bools: [true, false, true, false], values: %w[a b c] } }
   end
+
+  def test_help
+    opt = XOptionParser.new
+    opt.program_name = 'test'
+    assert { opt.help == "Usage: test\n" }
+
+    opt.on('-t', '--test[=VAL]', 'test desc')
+    assert { opt.help == "Usage: test [options]\n\nOptions:\n    -t, --test[=VAL]                 test desc\n" }
+
+    opt.on('VALUE', 'value desc')
+    assert { opt.help == "Usage: test [options] VALUE\n\nOptions:\n    -t, --test[=VAL]                 test desc\n    VALUE                            value desc\n" }
+
+    opt = XOptionParser.new
+    opt.program_name = 'test'
+    opt.on('-t', '--test[=VAL]', 'test desc')
+    opt.command('sub', 'sub desc') do |o|
+      o.on('-u', '--uest[=VAL]', 'uest desc')
+    end
+    opt.command('other')
+    assert { opt.help == "Usage: test [options] <command>\n\nOptions:\n    -t, --test[=VAL]                 test desc\n\nCommands:\n    sub                              sub desc\n    other\n" }
+
+    opt = opt.instance_variable_get(:@commands)['sub'].first.call
+    assert { opt.help == "Usage: test sub [options]\n\nsub desc\n\nOptions:\n    -u, --uest[=VAL]                 uest desc\n" }
+  end
 end

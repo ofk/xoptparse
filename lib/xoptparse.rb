@@ -36,10 +36,60 @@ class XOptionParser < ::OptionParser
     end
   end
 
-  def initialize(*args)
+  attr_reader :description
+
+  def initialize(description = nil, *args)
     @commands = {}
     @arg_stack = [[], []]
-    super(*args)
+    @description = description
+    @banner_usage = 'Usage: '
+    @banner_options = '[options]'
+    @banner_command = '<command>'
+    super(nil, *args)
+  end
+
+  def no_options
+    visit(:summarize, {}, {}) { return false }
+    true
+  end
+  private :no_options
+
+  def banner # rubocop:disable Metrics/AbcSize
+    return @banner if @banner
+
+    banner = +"#{@banner_usage}#{program_name}"
+    banner << " #{@banner_options}" unless no_options
+    visit(:add_banner, banner)
+    banner << " #{@banner_command}" unless @commands.empty?
+    @arg_stack.flatten(1).each do |sw|
+      banner << " #{sw.short.first}"
+    end
+    banner << "\n\n#{description}" if description
+
+    banner
+  end
+
+  def summarize(to = [], width = @summary_width, max = width - 1, indent = @summary_indent, &blk) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+    nl = "\n"
+    blk ||= proc { |l| to << (l.index(nl, -1) ? l : l + nl) }
+
+    no_opt = @arg_stack.flatten(1).empty? && no_options
+    blk.call("\nOptions:") if to.is_a?(String) && !no_opt
+
+    res = super(to, width, max, indent, &blk)
+    @arg_stack.flatten(1).each do |sw|
+      sw.summarize({}, {}, width, max, indent, &blk)
+    end
+
+    unless @commands.empty?
+      blk.call("\nCommands:") if to.is_a?(String)
+      @commands.each do |name, command|
+        sw = Switch::NoArgument.new(nil, nil, [name], nil, nil, command[1] ? [command[1]] : [], nil)
+        sw.summarize({}, {}, width, max, indent, &blk)
+      end
+    end
+
+    res
   end
 
   def define_opt_switch_values(target, swvs)
@@ -72,7 +122,7 @@ class XOptionParser < ::OptionParser
     pattern, conv = search_arg_switch_atype(sw0)
     sw0.instance_variable_set(:@pattern, pattern)
     sw0.instance_variable_set(:@conv, conv)
-    sw0.instance_variable_set(:@arg, sw0.desc.shift)
+    sw0.instance_variable_set(:@short, [sw0.desc.shift])
 
     # arg pattern example:
     # * req req => 1..1, 1..1
@@ -82,11 +132,11 @@ class XOptionParser < ::OptionParser
     # * req [opt] req... => 1..1, 0..1, 1..nil
     # * req [opt...] => 1..1, 0..nil
     # * req [opt...] req => 1..1, 0..nil, 1..1
-    ranges = sw0.arg.scan(/(?:\[\s*(.*?)\s*\]|(\S+))/).map do |opt, req|
+    ranges = sw0.short.first.scan(/(?:\[\s*(.*?)\s*\]|(\S+))/).map do |opt, req|
       (opt ? 0 : 1)..((opt || req).end_with?('...') ? nil : 1)
     end
     unless self.class.valid_arg_switch_ranges?(ranges)
-      raise ArgumentError, "unsupported argument format: #{sw0.arg.inspect}"
+      raise ArgumentError, "unsupported argument format: #{sw0.short.first.inspect}"
     end
 
     sw0.instance_variable_set(:@ranges, ranges)
@@ -98,7 +148,7 @@ class XOptionParser < ::OptionParser
   def valid_arg_switch(sw0)
     ranges = @arg_stack.flatten(1).map(&:ranges).flatten(1)
     unless self.class.valid_arg_switch_ranges?(ranges)
-      raise ArgumentError, "unsupported argument format: #{sw0.arg.inspect}"
+      raise ArgumentError, "unsupported argument format: #{sw0.short.first.inspect}"
     end
 
     sw0
@@ -193,8 +243,8 @@ class XOptionParser < ::OptionParser
     return argv if argv.empty?
 
     name = argv.shift
-    command = @commands[name]
-    return command.call.send(block_given? ? :permute! : :order!, *args, **kwargs) if command
+    cmd = @commands[name]
+    return cmd.first.call.send(block_given? ? :permute! : :order!, *args, **kwargs) if cmd
 
     puts "#{program_name}:" \
          "'#{name}' is not a #{program_name} command. See '#{program_name} --help'."
@@ -205,10 +255,13 @@ class XOptionParser < ::OptionParser
     parse_arguments(super(*args, **kwargs))
   end
 
-  def command(name, *args, &block)
-    @commands[name.to_s] = proc do
-      self.class.new(*args, &block)
-    end
+  def command(name, desc = nil, *args, &block)
+    @commands[name.to_s] = [proc do
+      self.class.new(desc, *args) do |opt|
+        opt.program_name = "#{program_name} #{name}"
+        block.call(opt) if block
+      end
+    end, desc]
     nil
   end
 end
