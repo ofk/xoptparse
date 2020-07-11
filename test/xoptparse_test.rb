@@ -2,9 +2,9 @@
 
 require 'test_helper'
 
-class XoptparseTest < Minitest::Test
+class XOptionParserTest < Minitest::Test
   def test_that_it_has_a_version_number
-    refute { ::Xoptparse::VERSION.nil? }
+    refute { ::XOptionParser::VERSION.nil? }
   end
 
   def test_it_does_something_useful

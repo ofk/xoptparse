@@ -2,7 +2,7 @@
 
 require 'xoptparse/version'
 
-module Xoptparse
+module XOptionParser
   class Error < StandardError; end
   # Your code goes here...
 end

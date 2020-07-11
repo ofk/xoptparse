@@ -6,7 +6,7 @@ require 'xoptparse/version'
 
 Gem::Specification.new do |spec|
   spec.name          = 'xoptparse'
-  spec.version       = Xoptparse::VERSION
+  spec.version       = XOptionParser::VERSION
   spec.authors       = ['ofk']
   spec.email         = ['ofkjpn+github@gmail.com']
 
