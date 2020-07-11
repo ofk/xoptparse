@@ -6,7 +6,6 @@ require 'optparse'
 class XOptionParser < ::OptionParser
   def initialize(description = nil, *args, &block)
     @commands = {}
-    @arg_stack = [[], []]
     @banner_usage = 'Usage: '
     @banner_options = '[options]'
     @banner_command = '<command>'
@@ -19,12 +18,15 @@ class XOptionParser < ::OptionParser
     end
   end
 
+  def select(*args, &block)
+    Enumerator.new do |y|
+      visit(:each_option) { |el| y << el }
+    end.select(*args, &block)
+  end
+  private :select
+
   def no_options
-    visit(:each_option) do |sw0|
-      next unless sw0.is_a?(::OptionParser::Switch)
-      return false if sw0.short || sw0.long
-    end
-    true
+    select { |sw| sw.is_a?(::OptionParser::Switch) }.all? { |sw| !(sw.short || sw.long) }
   end
   private :no_options
 
@@ -52,7 +54,7 @@ class XOptionParser < ::OptionParser
   private :define_opt_switch_values
 
   def search_arg_switch_atype(sw0)
-    @stack.reverse_each do |el|
+    visit(:tap) do |el|
       el.atype.each do |klass, atype|
         next unless atype[1] == sw0.conv
         return [nil, nil] if klass == Object
@@ -72,7 +74,7 @@ class XOptionParser < ::OptionParser
   private :fix_arg_switch
 
   def valid_arg_switch(sw0)
-    ranges = @arg_stack.flatten(1).map(&:ranges).flatten(1)
+    ranges = select { |sw| sw.is_a?(Switch::SimpleArgument) }.map(&:ranges).flatten(1)
     unless Switch::SimpleArgument.valid_ranges?(ranges)
       raise ArgumentError, "unsupported argument format: #{sw0.arg.inspect}"
     end
@@ -81,20 +83,6 @@ class XOptionParser < ::OptionParser
   end
   private :valid_arg_switch
 
-  def define_arg_switch(target, sw0)
-    case target
-    when :tail
-      @arg_stack[1].append(sw0)
-    when :head
-      @arg_stack[0].prepend(sw0)
-    else
-      @arg_stack[0].append(sw0)
-    end
-
-    valid_arg_switch(sw0)
-  end
-  private :define_arg_switch
-
   def define_at(target, *opts, &block)
     sw = make_switch(opts, block || proc {})
     sw0 = sw[0]
@@ -102,9 +90,9 @@ class XOptionParser < ::OptionParser
       define_opt_switch_values(target, sw)
     else
       sw0 = fix_arg_switch(sw0)
-      define_arg_switch(target, sw0)
       long = sw0.arg.scan(/(?:\[\s*(.*?)\s*\]|(\S+))/).flatten.compact
       define_opt_switch_values(target, [sw0, nil, long])
+      valid_arg_switch(sw0)
     end
     sw0
   end
@@ -126,7 +114,7 @@ class XOptionParser < ::OptionParser
   alias def_tail_option define_tail
 
   def parse_arguments(original_argv) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
-    arg_sws = @arg_stack.flatten(1)
+    arg_sws = select { |sw| sw.is_a?(Switch::SimpleArgument) }
     return original_argv if arg_sws.empty?
 
     req_count, opt_count, rest_req_count, last_req_count =
