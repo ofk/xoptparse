@@ -39,22 +39,6 @@ class XOptionParser < ::OptionParser
     banner
   end
 
-  def summarize(to = [], width = @summary_width, max = width - 1, indent = @summary_indent, &blk)
-    nl = "\n"
-    blk ||= proc { |l| to << (l.index(nl, -1) ? l : l + nl) }
-
-    res = super(to, width, max, indent, &blk)
-
-    unless @commands.empty?
-      @commands.each do |name, command|
-        sw = Switch::NoArgument.new(nil, nil, [name], nil, nil, command[1] ? [command[1]] : [], nil)
-        sw.summarize({}, {}, width, max, indent, &blk)
-      end
-    end
-
-    res
-  end
-
   def define_opt_switch_values(target, swvs)
     case target
     when :tail
@@ -201,8 +185,8 @@ class XOptionParser < ::OptionParser
     return argv if argv.empty?
 
     name = argv.shift
-    cmd = @commands[name]
-    return cmd.first.call.send(block_given? ? :permute! : :order!, *args, **kwargs) if cmd
+    sw = @commands[name]
+    return sw.block.call.send(block_given? ? :permute! : :order!, *args, **kwargs) if sw
 
     puts "#{program_name}:" \
          "'#{name}' is not a #{program_name} command. See '#{program_name} --help'."
@@ -210,17 +194,37 @@ class XOptionParser < ::OptionParser
   end
 
   def command(name, desc = nil, *args, &block)
-    @commands[name.to_s] = [proc do
+    sw0 = Switch::SummarizeArgument.new(nil, nil, nil, nil, name.to_s, desc ? [desc] : [], nil) do
       self.class.new(desc, *args) do |opt|
         opt.program_name = "#{program_name} #{name}"
-        block.call(opt) if block
+        block&.call(opt)
       end
-    end, desc]
+    end
+    define_opt_switch_values(:body, [sw0, nil, [sw0.arg]])
+    @commands[name.to_s] = sw0
     nil
   end
 
   class Switch < ::OptionParser::Switch
-    class SimpleArgument < NoArgument
+    class SummarizeArgument < NoArgument
+      undef_method :add_banner
+
+      def summarize(*args)
+        original_arg = arg
+        @short = arg.scan(/\[\s*.*?\s*\]|\S+/)
+        @arg = nil
+        res = super(*args)
+        @arg = original_arg
+        @short = nil
+        res
+      end
+
+      def match_nonswitch?(*args)
+        super(*args) if @pattern.is_a?(Regexp)
+      end
+    end
+
+    class SimpleArgument < SummarizeArgument
       class << self
         def valid_ranges?(ranges)
           ranges.inject(0) do |pt, r| # prev_type = req: 0, opt: 1, rest: 2, after_req: 3
@@ -262,22 +266,8 @@ class XOptionParser < ::OptionParser
         end
       end
 
-      def summarize(*args)
-        original_arg = arg
-        @short = arg.scan(/\[\s*.*?\s*\]|\S+/)
-        @arg = nil
-        res = super(*args)
-        @arg = original_arg
-        @short = nil
-        res
-      end
-
       def add_banner(to)
         to << " #{arg}"
-      end
-
-      def match_nonswitch?(*args)
-        super(*args) if @pattern.is_a?(Regexp)
       end
     end
   end

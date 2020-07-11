@@ -238,7 +238,7 @@ class XOptionParserTest < Minitest::Test
     opt.command('other')
     assert { opt.help == "Usage: test [options] VALUE <command>\n\nOptions:\n    -t, --test[=VAL]                 test desc\n    VALUE                            value desc\n\nCommands:\n    sub                              sub desc\n    other\n" }
 
-    opt = opt.instance_variable_get(:@commands)['sub'].first.call
+    opt = opt.instance_variable_get(:@commands)['sub'].block.call
     assert { opt.help == "Usage: test sub [options]\n\nsub desc\n\nOptions:\n    -u, --uest[=VAL]                 uest desc\n" }
   end
 
