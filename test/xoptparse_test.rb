@@ -203,4 +203,15 @@ class XOptionParserTest < Minitest::Test
     assert { argv.empty? }
     assert { res == { v1: 'a', v2: 'b', v3: %w[c d e], v4: 'f' } }
   end
+
+  def test_typed_arguments
+    res = {}
+    opt = XOptionParser.new do |o|
+      o.on('port', Numeric) { |v| res[:port] = v }
+      o.on('bools...', TrueClass) { |v| res[:bools] = v }
+      o.on('values', Array) { |v| res[:values] = v }
+    end
+    opt.parse!(%w[80 yes no + - a,b,c])
+    assert { res == { port: 80, bools: [true, false, true, false], values: %w[a b c] } }
+  end
 end

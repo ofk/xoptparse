@@ -54,7 +54,24 @@ class XOptionParser < ::OptionParser
   end
   private :define_opt_switch_values
 
-  def fix_arg_switch(sw0)
+  def search_arg_switch_atype(sw0)
+    @stack.reverse_each do |el|
+      el.atype.each do |klass, atype|
+        next unless atype[1] == sw0.conv
+        return [nil, nil] if klass == Object
+
+        return atype
+      end
+    end
+
+    [nil, nil]
+  end
+  private :search_arg_switch_atype
+
+  def fix_arg_switch(sw0) # rubocop:disable Metrics/AbcSize
+    pattern, conv = search_arg_switch_atype(sw0)
+    sw0.instance_variable_set(:@pattern, pattern)
+    sw0.instance_variable_set(:@conv, conv)
     sw0.instance_variable_set(:@arg, sw0.desc.shift)
 
     # arg pattern example:
@@ -149,13 +166,14 @@ class XOptionParser < ::OptionParser
     rest_argv = argv[(req_count + opt_size)...(argv.size - last_req_count)]
 
     arg_sws.each do |sw|
+      conv = proc { |v| sw.send(:conv_arg, *sw.send(:parse_arg, v))[2] }
       a = sw.ranges.map do |r|
         if r.end.nil?
-          rest_argv
+          rest_argv.map(&conv)
         elsif r.begin.zero?
-          opt_argv.shift
+          conv.call(opt_argv.shift)
         else
-          req_argv.shift
+          conv.call(req_argv.shift)
         end
       end
       sw.block.call(*a)
