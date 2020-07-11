@@ -233,13 +233,22 @@ class XOptionParser < ::OptionParser
   end
   private :parse_arguments
 
-  def order!(*args, **kwargs) # rubocop:disable Metrics/AbcSize
-    if @commands.empty?
-      argv = super(*args, **kwargs)
-      return block_given? ? argv : parse_arguments(argv)
-    end
+  def parse_in_order(*args, &nonopt)
+    argv = []
+    rest = if nonopt
+             super(*args, &argv.method(:<<))
+           else
+             argv = super(*args)
+           end
+    parse_arguments(argv).map(&nonopt)
+    rest
+  end
+  private :parse_in_order
 
-    argv = super(*args, **kwargs) { |a| throw :terminate, a }
+  def order!(*args, **kwargs)
+    return super(*args, **kwargs) if @commands.empty?
+
+    argv = super(*args, **kwargs, &nil)
     return argv if argv.empty?
 
     name = argv.shift
@@ -249,10 +258,6 @@ class XOptionParser < ::OptionParser
     puts "#{program_name}:" \
          "'#{name}' is not a #{program_name} command. See '#{program_name} --help'."
     exit
-  end
-
-  def permute!(*args, **kwargs)
-    parse_arguments(super(*args, **kwargs))
   end
 
   def command(name, desc = nil, *args, &block)
