@@ -122,27 +122,27 @@ class XOptionParserTest < Minitest::Test
 
   def test_arg_switch_ranges_validate
     # req
-    assert { XOptionParser.valid_arg_switch_ranges?([1..1]) }
-    assert { XOptionParser.valid_arg_switch_ranges?([1..1, 1..1, 1..1]) }
+    assert { XOptionParser::Switch::SimpleArgument.valid_ranges?([1..1]) }
+    assert { XOptionParser::Switch::SimpleArgument.valid_ranges?([1..1, 1..1, 1..1]) }
     # opt
-    assert { XOptionParser.valid_arg_switch_ranges?([0..1]) }
-    assert { XOptionParser.valid_arg_switch_ranges?([0..1, 0..1, 0..1]) }
+    assert { XOptionParser::Switch::SimpleArgument.valid_ranges?([0..1]) }
+    assert { XOptionParser::Switch::SimpleArgument.valid_ranges?([0..1, 0..1, 0..1]) }
     # req + opt
-    assert { XOptionParser.valid_arg_switch_ranges?([1..1, 0..1]) }
-    assert { XOptionParser.valid_arg_switch_ranges?([0..1, 1..1]) }
-    assert { XOptionParser.valid_arg_switch_ranges?([1..1, 0..1, 1..1]) }
+    assert { XOptionParser::Switch::SimpleArgument.valid_ranges?([1..1, 0..1]) }
+    assert { XOptionParser::Switch::SimpleArgument.valid_ranges?([0..1, 1..1]) }
+    assert { XOptionParser::Switch::SimpleArgument.valid_ranges?([1..1, 0..1, 1..1]) }
     # rest
-    assert { XOptionParser.valid_arg_switch_ranges?([1..nil]) }
-    assert { XOptionParser.valid_arg_switch_ranges?([0..nil]) }
-    refute { XOptionParser.valid_arg_switch_ranges?([1..nil, 0..nil]) }
+    assert { XOptionParser::Switch::SimpleArgument.valid_ranges?([1..nil]) }
+    assert { XOptionParser::Switch::SimpleArgument.valid_ranges?([0..nil]) }
+    refute { XOptionParser::Switch::SimpleArgument.valid_ranges?([1..nil, 0..nil]) }
     # opt + rest
-    assert { XOptionParser.valid_arg_switch_ranges?([0..1, 1..nil]) }
-    refute { XOptionParser.valid_arg_switch_ranges?([1..nil, 0..1]) }
+    assert { XOptionParser::Switch::SimpleArgument.valid_ranges?([0..1, 1..nil]) }
+    refute { XOptionParser::Switch::SimpleArgument.valid_ranges?([1..nil, 0..1]) }
     # req + rest
-    assert { XOptionParser.valid_arg_switch_ranges?([1..1, 1..nil]) }
-    assert { XOptionParser.valid_arg_switch_ranges?([1..nil, 1..1]) }
+    assert { XOptionParser::Switch::SimpleArgument.valid_ranges?([1..1, 1..nil]) }
+    assert { XOptionParser::Switch::SimpleArgument.valid_ranges?([1..nil, 1..1]) }
     # req + opt + rest
-    assert { XOptionParser.valid_arg_switch_ranges?([1..1, 0..1, 1..nil, 1..1]) }
+    assert { XOptionParser::Switch::SimpleArgument.valid_ranges?([1..1, 0..1, 1..nil, 1..1]) }
   end
 
   def test_arguments

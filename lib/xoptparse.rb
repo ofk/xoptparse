@@ -4,38 +4,6 @@ require 'xoptparse/version'
 require 'optparse'
 
 class XOptionParser < ::OptionParser
-  class << self
-    def valid_arg_switch_ranges?(ranges)
-      ranges.inject(0) do |pt, r| # prev_type = req: 0, opt: 1, rest: 2, after_req: 3
-        t = r.end.nil? ? 2 : 1 - r.begin
-        next pt.zero? ? 0 : 3 if t.zero?
-        next t if pt < 2 && pt <= t
-
-        return false
-      end
-      true
-    end
-
-    def calc_arg_switch_ranges_counts(ranges)
-      req_count = 0
-      opt_count = 0
-      rest_req_count = nil
-      last_req_count = 0
-      ranges.each do |r|
-        if r.end.nil?
-          rest_req_count = r.begin
-        elsif r.begin.zero?
-          opt_count += 1
-        elsif opt_count.positive? || rest_req_count
-          last_req_count += 1
-        else
-          req_count += 1
-        end
-      end
-      [req_count, opt_count, rest_req_count, last_req_count]
-    end
-  end
-
   attr_reader :description
 
   def initialize(description = nil, *args)
@@ -54,14 +22,14 @@ class XOptionParser < ::OptionParser
   end
   private :no_options
 
-  def banner # rubocop:disable Metrics/AbcSize
+  def banner
     return @banner if @banner
 
     banner = +"#{@banner_usage}#{program_name}"
     banner << " #{@banner_options}" unless no_options
     visit(:add_banner, banner)
     @arg_stack.flatten(1).each do |sw|
-      banner << " #{sw.short.first}"
+      banner << " #{sw.arg}"
     end
     banner << " #{@banner_command}" unless @commands.empty?
     banner << "\n\n#{description}" if description
@@ -118,37 +86,16 @@ class XOptionParser < ::OptionParser
   end
   private :search_arg_switch_atype
 
-  def fix_arg_switch(sw0) # rubocop:disable Metrics/AbcSize
+  def fix_arg_switch(sw0)
     pattern, conv = search_arg_switch_atype(sw0)
-    sw0.instance_variable_set(:@pattern, pattern)
-    sw0.instance_variable_set(:@conv, conv)
-    sw0.instance_variable_set(:@short, [sw0.desc.shift])
-
-    # arg pattern example:
-    # * req req => 1..1, 1..1
-    # * req [opt] => 1..1, 0..1
-    # * req... => 1..nil
-    # * [opt...] => 0..nil
-    # * req [opt] req... => 1..1, 0..1, 1..nil
-    # * req [opt...] => 1..1, 0..nil
-    # * req [opt...] req => 1..1, 0..nil, 1..1
-    ranges = sw0.short.first.scan(/(?:\[\s*(.*?)\s*\]|(\S+))/).map do |opt, req|
-      (opt ? 0 : 1)..((opt || req).end_with?('...') ? nil : 1)
-    end
-    unless self.class.valid_arg_switch_ranges?(ranges)
-      raise ArgumentError, "unsupported argument format: #{sw0.short.first.inspect}"
-    end
-
-    sw0.instance_variable_set(:@ranges, ranges)
-    sw0.define_singleton_method(:ranges) { @ranges }
-    sw0
+    Switch::SimpleArgument.new(pattern, conv, nil, nil, sw0.desc[0], sw0.desc[1..], sw0.block)
   end
   private :fix_arg_switch
 
   def valid_arg_switch(sw0)
     ranges = @arg_stack.flatten(1).map(&:ranges).flatten(1)
-    unless self.class.valid_arg_switch_ranges?(ranges)
-      raise ArgumentError, "unsupported argument format: #{sw0.short.first.inspect}"
+    unless Switch::SimpleArgument.valid_ranges?(ranges)
+      raise ArgumentError, "unsupported argument format: #{sw0.arg.inspect}"
     end
 
     sw0
@@ -202,7 +149,7 @@ class XOptionParser < ::OptionParser
     return original_argv if arg_sws.empty?
 
     req_count, opt_count, rest_req_count, last_req_count =
-      self.class.calc_arg_switch_ranges_counts(arg_sws.map(&:ranges).flatten(1))
+      Switch::SimpleArgument.calc_argument_counts(arg_sws.map(&:ranges).flatten(1))
 
     argv_min = req_count + last_req_count + (rest_req_count || 0)
     raise MissingArgument, original_argv.join(' ').to_s if original_argv.size < argv_min
@@ -273,5 +220,59 @@ class XOptionParser < ::OptionParser
       end
     end, desc]
     nil
+  end
+
+  class Switch < ::OptionParser::Switch
+    class SimpleArgument < NoArgument
+      class << self
+        def valid_ranges?(ranges)
+          ranges.inject(0) do |pt, r| # prev_type = req: 0, opt: 1, rest: 2, after_req: 3
+            t = r.end.nil? ? 2 : 1 - r.begin
+            next pt.zero? ? 0 : 3 if t.zero?
+            next t if pt < 2 && pt <= t
+
+            return false
+          end
+          true
+        end
+
+        def calc_argument_counts(ranges)
+          req_count = 0
+          opt_count = 0
+          rest_req_count = nil
+          last_req_count = 0
+          ranges.each do |r|
+            if r.end.nil?
+              rest_req_count = r.begin
+            elsif r.begin.zero?
+              opt_count += 1
+            elsif opt_count.positive? || rest_req_count
+              last_req_count += 1
+            else
+              req_count += 1
+            end
+          end
+          [req_count, opt_count, rest_req_count, last_req_count]
+        end
+      end
+
+      attr_reader :ranges
+
+      def initialize(*args)
+        super(*args)
+        @ranges = arg.scan(/\[\s*(.*?)\s*\]|(\S+)/).map do |opt, req|
+          (opt ? 0 : 1)..((opt || req).end_with?('...') ? nil : 1)
+        end
+      end
+
+      def summarize(*args)
+        @short = arg.scan(/\[\s*.*?\s*\]|\S+/)
+        @arg = nil
+        res = super(*args)
+        @arg = short.shift
+        @short = nil
+        res
+      end
+    end
   end
 end
