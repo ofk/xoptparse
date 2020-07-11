@@ -9,6 +9,35 @@ class XOptionParser < ::OptionParser
     super(*args)
   end
 
+  def define_at(target, *opts, &block)
+    sw = make_switch(opts, block)
+    case target
+    when :tail
+      base.append(*sw)
+    when :head
+      top.prepend(*sw)
+    else
+      top.append(*sw)
+    end
+    sw[0]
+  end
+  private :define_at
+
+  def define(*args, &block)
+    define_at(:body, *args, &block)
+  end
+  alias def_option define
+
+  def define_head(*args, &block)
+    define_at(:head, *args, &block)
+  end
+  alias def_head_option define_head
+
+  def define_tail(*args, &block)
+    define_at(:tail, *args, &block)
+  end
+  alias def_tail_option define_tail
+
   def order!(*args, **kwargs)
     return super(*args, **kwargs) if @commands.empty?
 
