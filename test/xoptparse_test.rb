@@ -119,4 +119,88 @@ class XOptionParserTest < Minitest::Test
     assert { argv.empty? }
     assert { res == { c: :bar, o: nil } }
   end
+
+  def test_arg_switch_ranges_validate
+    # req
+    assert { XOptionParser.valid_arg_switch_ranges?([1..1]) }
+    assert { XOptionParser.valid_arg_switch_ranges?([1..1, 1..1, 1..1]) }
+    # opt
+    assert { XOptionParser.valid_arg_switch_ranges?([0..1]) }
+    assert { XOptionParser.valid_arg_switch_ranges?([0..1, 0..1, 0..1]) }
+    # req + opt
+    assert { XOptionParser.valid_arg_switch_ranges?([1..1, 0..1]) }
+    assert { XOptionParser.valid_arg_switch_ranges?([0..1, 1..1]) }
+    assert { XOptionParser.valid_arg_switch_ranges?([1..1, 0..1, 1..1]) }
+    # rest
+    assert { XOptionParser.valid_arg_switch_ranges?([1..nil]) }
+    assert { XOptionParser.valid_arg_switch_ranges?([0..nil]) }
+    refute { XOptionParser.valid_arg_switch_ranges?([1..nil, 0..nil]) }
+    # opt + rest
+    assert { XOptionParser.valid_arg_switch_ranges?([0..1, 1..nil]) }
+    refute { XOptionParser.valid_arg_switch_ranges?([1..nil, 0..1]) }
+    # req + rest
+    assert { XOptionParser.valid_arg_switch_ranges?([1..1, 1..nil]) }
+    assert { XOptionParser.valid_arg_switch_ranges?([1..nil, 1..1]) }
+    # req + opt + rest
+    assert { XOptionParser.valid_arg_switch_ranges?([1..1, 0..1, 1..nil, 1..1]) }
+  end
+
+  def test_arguments
+    create_option_parser = proc do |res|
+      XOptionParser.new do |o|
+        o.on('v1') { |v| res[:v1] = v }
+        o.on('[v2] v3') do |v2, v3|
+          res[:v2] = v2
+          res[:v3] = v3
+        end
+      end
+    end
+
+    create_rest_option_parser = proc do |res|
+      XOptionParser.new do |o|
+        o.on('v1 [v2]') do |v1, v2|
+          res[:v1] = v1
+          res[:v2] = v2
+        end
+        o.on('v3...') { |v3| res[:v3] = v3 }
+        o.on('v4') { |v4| res[:v4] = v4 }
+      end
+    end
+
+    opt = create_option_parser.call({})
+    assert_raises(XOptionParser::MissingArgument) { opt.parse!([]) }
+
+    opt = create_option_parser.call({})
+    assert_raises(XOptionParser::MissingArgument) { opt.parse!(%w[a]) }
+
+    res = {}
+    opt = create_option_parser.call(res)
+    argv = opt.parse!(%w[a b])
+    assert { argv.empty? }
+    assert { res == { v1: 'a', v2: nil, v3: 'b' } }
+
+    res = {}
+    opt = create_option_parser.call(res)
+    argv = opt.parse!(%w[a b c])
+    assert { argv.empty? }
+    assert { res == { v1: 'a', v2: 'b', v3: 'c' } }
+
+    res = {}
+    opt = create_option_parser.call(res)
+    argv = opt.parse!(%w[a b c d])
+    assert { argv == %w[d] }
+    assert { res == { v1: 'a', v2: 'b', v3: 'c' } }
+
+    res = {}
+    opt = create_rest_option_parser.call(res)
+    argv = opt.parse!(%w[a b c])
+    assert { argv.empty? }
+    assert { res == { v1: 'a', v2: nil, v3: %w[b], v4: 'c' } }
+
+    res = {}
+    opt = create_rest_option_parser.call(res)
+    argv = opt.parse!(%w[a b c d e f])
+    assert { argv.empty? }
+    assert { res == { v1: 'a', v2: 'b', v3: %w[c d e], v4: 'f' } }
+  end
 end
