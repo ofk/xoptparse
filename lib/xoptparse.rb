@@ -1,4 +1,6 @@
-require "xoptparse/version"
+# frozen_string_literal: true
+
+require 'xoptparse/version'
 
 module Xoptparse
   class Error < StandardError; end
