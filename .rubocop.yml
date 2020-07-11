@@ -5,3 +5,14 @@ AllCops:
 
 Layout/LineLength:
   Max: 100
+
+Metrics/AbcSize:
+  Exclude:
+    - test/**/*
+
+Metrics/MethodLength:
+  Exclude:
+    - test/**/*
+
+Style/Documentation:
+  Enabled: false

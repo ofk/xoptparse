@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
-module XOptionParser
+require 'optparse'
+
+class XOptionParser < ::OptionParser
   VERSION = '0.1.0'
 end
