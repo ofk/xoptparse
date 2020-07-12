@@ -75,34 +75,29 @@ class XOptionParser < ::OptionParser
     arg_sws = select { |sw| sw.is_a?(Switch::SimpleArgument) }
     return argv if arg_sws.empty?
 
-    req_count, opt_count, rest_req_count, last_req_count =
-      Switch::SimpleArgument.calc_argument_counts(arg_sws.map(&:ranges).flatten(1))
+    sws_ranges = arg_sws.map(&:ranges).flatten(1)
+    req_count = sws_ranges.sum(&:begin)
+    raise MissingArgument, argv.join(' ') if argv.size < req_count
 
-    argv_min = req_count + last_req_count + (rest_req_count || 0)
-    raise MissingArgument, argv.join(' ').to_s if argv.size < argv_min
-
-    argv_max = [rest_req_count ? Float::INFINITY : argv_min + opt_count, argv.size].min
-    unless @commands.empty?
-      index = argv[argv_min...argv_max].index { |arg| @commands.include?(arg) }
-      argv_max = argv_min + index if index
-    end
+    opt_count = sws_ranges.sum(&:size) - sws_ranges.size
+    opt_index = argv[req_count...].index { |arg| @commands.include?(arg) } unless @commands.empty?
+    opt_count = [opt_count, opt_index || Float::INFINITY, argv.size - req_count].min
 
     arg_sws.each do |sw|
       conv = proc { |v| sw.send(:conv_arg, *sw.send(:parse_arg, v))[2] }
       a = sw.ranges.map do |r|
         if r.end.nil?
-          argv_min -= r.begin
-          rest_size = argv_max - argv_min
-          argv_max = argv_min
+          rest_size = r.begin + opt_count
+          req_count -= r.begin
+          opt_count = 0
           argv.slice!(0...rest_size).map(&conv)
         elsif r.begin.zero?
-          next conv.call(nil) if argv_min == argv_max
+          next conv.call(nil) if opt_count.zero?
 
-          argv_max -= 1
+          opt_count -= 1
           conv.call(argv.shift)
         else
-          argv_min -= 1
-          argv_max -= 1
+          req_count -= 1
           conv.call(argv.shift)
         end
       end
@@ -172,27 +167,6 @@ class XOptionParser < ::OptionParser
     end
 
     class SimpleArgument < SummarizeArgument
-      class << self
-        def calc_argument_counts(ranges)
-          req_count = 0
-          opt_count = 0
-          rest_req_count = nil
-          last_req_count = 0
-          ranges.each do |r|
-            if r.end.nil?
-              rest_req_count = r.begin
-            elsif r.begin.zero?
-              opt_count += 1
-            elsif opt_count.positive? || rest_req_count
-              last_req_count += 1
-            else
-              req_count += 1
-            end
-          end
-          [req_count, opt_count, rest_req_count, last_req_count]
-        end
-      end
-
       attr_reader :ranges
 
       def initialize(*args)
