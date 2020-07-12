@@ -73,16 +73,6 @@ class XOptionParser < ::OptionParser
   end
   private :fix_arg_switch
 
-  def valid_arg_switch(sw0)
-    ranges = select { |sw| sw.is_a?(Switch::SimpleArgument) }.map(&:ranges).flatten(1)
-    unless Switch::SimpleArgument.valid_ranges?(ranges)
-      raise ArgumentError, "unsupported argument format: #{sw0.arg.inspect}"
-    end
-
-    sw0
-  end
-  private :valid_arg_switch
-
   def define_at(target, *opts, &block)
     sw = make_switch(opts, block || proc {})
     sw0 = sw[0]
@@ -92,7 +82,6 @@ class XOptionParser < ::OptionParser
       sw0 = fix_arg_switch(sw0)
       long = sw0.arg.scan(/(?:\[\s*(.*?)\s*\]|(\S+))/).flatten.compact
       define_opt_switch_values(target, [sw0, nil, long])
-      valid_arg_switch(sw0)
     end
     sw0
   end
@@ -113,44 +102,45 @@ class XOptionParser < ::OptionParser
   end
   alias def_tail_option define_tail
 
-  def parse_arguments(original_argv) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+  def parse_arguments(argv) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
     arg_sws = select { |sw| sw.is_a?(Switch::SimpleArgument) }
-    return original_argv if arg_sws.empty?
+    return argv if arg_sws.empty?
 
     req_count, opt_count, rest_req_count, last_req_count =
       Switch::SimpleArgument.calc_argument_counts(arg_sws.map(&:ranges).flatten(1))
 
     argv_min = req_count + last_req_count + (rest_req_count || 0)
-    raise MissingArgument, original_argv.join(' ').to_s if original_argv.size < argv_min
+    raise MissingArgument, argv.join(' ').to_s if argv.size < argv_min
 
-    argv_max = rest_req_count ? nil : argv_min + opt_count
+    argv_max = [rest_req_count ? Float::INFINITY : argv_min + opt_count, argv.size].min
     unless @commands.empty?
-      index = original_argv[argv_min...argv_max].index { |arg| @commands.include?(arg) }
+      index = argv[argv_min...argv_max].index { |arg| @commands.include?(arg) }
       argv_max = argv_min + index if index
     end
-
-    argv = original_argv.slice!(0...argv_max)
-
-    opt_size = [argv.size - argv_min, opt_count].min
-    req_argv = argv[0...req_count] + argv[(argv.size - last_req_count)...argv.size]
-    opt_argv = argv[req_count...(req_count + opt_size)] # + ([nil] * (opt_count - opt_size))
-    rest_argv = argv[(req_count + opt_size)...(argv.size - last_req_count)]
 
     arg_sws.each do |sw|
       conv = proc { |v| sw.send(:conv_arg, *sw.send(:parse_arg, v))[2] }
       a = sw.ranges.map do |r|
         if r.end.nil?
-          rest_argv.map(&conv)
+          argv_min -= r.begin
+          rest_size = argv_max - argv_min
+          argv_max = argv_min
+          argv.slice!(0...rest_size).map(&conv)
         elsif r.begin.zero?
-          conv.call(opt_argv.shift)
+          next conv.call(nil) if argv_min == argv_max
+
+          argv_max -= 1
+          conv.call(argv.shift)
         else
-          conv.call(req_argv.shift)
+          argv_min -= 1
+          argv_max -= 1
+          conv.call(argv.shift)
         end
       end
       sw.block.call(*a)
     end
 
-    original_argv
+    argv
   end
   private :parse_arguments
 
@@ -214,17 +204,6 @@ class XOptionParser < ::OptionParser
 
     class SimpleArgument < SummarizeArgument
       class << self
-        def valid_ranges?(ranges)
-          ranges.inject(0) do |pt, r| # prev_type = req: 0, opt: 1, rest: 2, after_req: 3
-            t = r.end.nil? ? 2 : 1 - r.begin
-            next pt.zero? ? 0 : 3 if t.zero?
-            next t if pt < 2 && pt <= t
-
-            return false
-          end
-          true
-        end
-
         def calc_argument_counts(ranges)
           req_count = 0
           opt_count = 0
