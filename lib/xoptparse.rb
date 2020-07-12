@@ -41,18 +41,6 @@ class XOptionParser < ::OptionParser
     banner
   end
 
-  def define_opt_switch_values(target, swvs)
-    case target
-    when :tail
-      base.append(*swvs)
-    when :head
-      top.prepend(*swvs)
-    else
-      top.append(*swvs)
-    end
-  end
-  private :define_opt_switch_values
-
   def search_arg_switch_atype(sw0)
     visit(:tap) do |el|
       el.atype.each do |klass, atype|
@@ -73,34 +61,15 @@ class XOptionParser < ::OptionParser
   end
   private :fix_arg_switch
 
-  def define_at(target, *opts, &block)
-    sw = make_switch(opts, block || proc {})
+  def make_switch(opts, block = nil)
+    sw = super(opts, block || proc {})
     sw0 = sw[0]
-    if sw0.short || sw0.long
-      define_opt_switch_values(target, sw)
-    else
-      sw0 = fix_arg_switch(sw0)
-      long = sw0.arg.scan(/(?:\[\s*(.*?)\s*\]|(\S+))/).flatten.compact
-      define_opt_switch_values(target, [sw0, nil, long])
-    end
-    sw0
-  end
-  private :define_at
+    return sw if sw0.short || sw0.long
 
-  def define(*args, &block)
-    define_at(:body, *args, &block)
+    sw0 = fix_arg_switch(sw0)
+    long = sw0.arg.scan(/(?:\[\s*(.*?)\s*\]|(\S+))/).flatten.compact
+    [sw0, nil, long]
   end
-  alias def_option define
-
-  def define_head(*args, &block)
-    define_at(:head, *args, &block)
-  end
-  alias def_head_option define_head
-
-  def define_tail(*args, &block)
-    define_at(:tail, *args, &block)
-  end
-  alias def_tail_option define_tail
 
   def parse_arguments(argv) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
     arg_sws = select { |sw| sw.is_a?(Switch::SimpleArgument) }
@@ -178,7 +147,7 @@ class XOptionParser < ::OptionParser
         block&.call(opt)
       end
     end
-    define_opt_switch_values(:body, [sw0, nil, [sw0.arg]])
+    top.append(sw0, nil, [sw0.arg])
     @commands[name.to_s] = sw0
     nil
   end
