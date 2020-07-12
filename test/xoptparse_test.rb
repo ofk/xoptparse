@@ -220,20 +220,23 @@ class XOptionParserTest < Minitest::Test
     opt.program_name = 'test'
     assert { opt.help == "Usage: test\n" }
 
+    opt.separator ''
+    opt.separator 'Options:'
     opt.on('-t', '--test[=VAL]', 'test desc')
     assert { opt.help == "Usage: test [options]\n\nOptions:\n    -t, --test[=VAL]                 test desc\n" }
 
     opt.on('VALUE', 'value desc')
     assert { opt.help == "Usage: test [options] VALUE\n\nOptions:\n    -t, --test[=VAL]                 test desc\n    VALUE                            value desc\n" }
 
-    opt = XOptionParser.new
-    opt.program_name = 'test'
-    opt.on('-t', '--test[=VAL]', 'test desc')
+    opt.separator ''
+    opt.separator 'Commands:'
     opt.command('sub', 'sub desc') do |o|
+      o.separator ''
+      o.separator 'Options:'
       o.on('-u', '--uest[=VAL]', 'uest desc')
     end
     opt.command('other')
-    assert { opt.help == "Usage: test [options] <command>\n\nOptions:\n    -t, --test[=VAL]                 test desc\n\nCommands:\n    sub                              sub desc\n    other\n" }
+    assert { opt.help == "Usage: test [options] VALUE <command>\n\nOptions:\n    -t, --test[=VAL]                 test desc\n    VALUE                            value desc\n\nCommands:\n    sub                              sub desc\n    other\n" }
 
     opt = opt.instance_variable_get(:@commands)['sub'].first.call
     assert { opt.help == "Usage: test sub [options]\n\nsub desc\n\nOptions:\n    -u, --uest[=VAL]                 uest desc\n" }
@@ -254,7 +257,7 @@ class XOptionParserTest < Minitest::Test
 
     opt = create_option_parser.call({})
     opt.program_name = 'test'
-    assert { opt.help == "Usage: test v1 [v2] <command>\n\nOptions:\n    v1\n    [v2]\n\nCommands:\n    foo\n" }
+    assert { opt.help == "Usage: test v1 [v2] <command>\n    v1\n    [v2]\n    foo\n" }
 
     res = {}
     opt = create_option_parser.call(res)

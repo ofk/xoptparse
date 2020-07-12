@@ -4,20 +4,26 @@ require 'xoptparse/version'
 require 'optparse'
 
 class XOptionParser < ::OptionParser
-  attr_reader :description
-
-  def initialize(description = nil, *args)
+  def initialize(description = nil, *args, &block)
     @commands = {}
     @arg_stack = [[], []]
-    @description = description
     @banner_usage = 'Usage: '
     @banner_options = '[options]'
     @banner_command = '<command>'
-    super(nil, *args)
+    super(nil, *args) do |opt|
+      if description
+        opt.separator ''
+        opt.separator description
+      end
+      block&.call(opt)
+    end
   end
 
   def no_options
-    visit(:summarize, {}, {}) { return false }
+    visit(:each_option) do |sw0|
+      next unless sw0.is_a?(::OptionParser::Switch)
+      return false if sw0.short || sw0.long
+    end
     true
   end
   private :no_options
@@ -28,29 +34,18 @@ class XOptionParser < ::OptionParser
     banner = +"#{@banner_usage}#{program_name}"
     banner << " #{@banner_options}" unless no_options
     visit(:add_banner, banner)
-    @arg_stack.flatten(1).each do |sw|
-      banner << " #{sw.arg}"
-    end
     banner << " #{@banner_command}" unless @commands.empty?
-    banner << "\n\n#{description}" if description
 
     banner
   end
 
-  def summarize(to = [], width = @summary_width, max = width - 1, indent = @summary_indent, &blk) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+  def summarize(to = [], width = @summary_width, max = width - 1, indent = @summary_indent, &blk)
     nl = "\n"
     blk ||= proc { |l| to << (l.index(nl, -1) ? l : l + nl) }
 
-    no_opt = @arg_stack.flatten(1).empty? && no_options
-    blk.call("\nOptions:") if to.is_a?(String) && !no_opt
-
     res = super(to, width, max, indent, &blk)
-    @arg_stack.flatten(1).each do |sw|
-      sw.summarize({}, {}, width, max, indent, &blk)
-    end
 
     unless @commands.empty?
-      blk.call("\nCommands:") if to.is_a?(String)
       @commands.each do |name, command|
         sw = Switch::NoArgument.new(nil, nil, [name], nil, nil, command[1] ? [command[1]] : [], nil)
         sw.summarize({}, {}, width, max, indent, &blk)
@@ -124,6 +119,8 @@ class XOptionParser < ::OptionParser
     else
       sw0 = fix_arg_switch(sw0)
       define_arg_switch(target, sw0)
+      long = sw0.arg.scan(/(?:\[\s*(.*?)\s*\]|(\S+))/).flatten.compact
+      define_opt_switch_values(target, [sw0, nil, long])
     end
     sw0
   end
@@ -266,12 +263,21 @@ class XOptionParser < ::OptionParser
       end
 
       def summarize(*args)
+        original_arg = arg
         @short = arg.scan(/\[\s*.*?\s*\]|\S+/)
         @arg = nil
         res = super(*args)
-        @arg = short.shift
+        @arg = original_arg
         @short = nil
         res
+      end
+
+      def add_banner(to)
+        to << " #{arg}"
+      end
+
+      def match_nonswitch?(*args)
+        super(*args) if @pattern.is_a?(Regexp)
       end
     end
   end
