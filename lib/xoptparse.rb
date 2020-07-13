@@ -148,7 +148,7 @@ class XOptionParser < ::OptionParser
   end
 
   class Switch < ::OptionParser::Switch
-    class SummarizeArgument < NoArgument
+    class SummarizeArgument < self
       undef_method :add_banner
 
       def summarize(*args)
