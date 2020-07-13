@@ -160,18 +160,18 @@ class XOptionParser < ::OptionParser
     class SummarizeArgument < self
       undef_method :add_banner
 
-      def summarize(*args)
+      def summarize(*)
         original_arg = arg
         @short = arg.scan(/\[\s*.*?\s*\]|\S+/)
         @arg = nil
-        res = super(*args)
+        res = super
         @arg = original_arg
         @short = nil
         res
       end
 
-      def match_nonswitch?(*args)
-        super(*args) if @pattern.is_a?(Regexp)
+      def match_nonswitch?(*)
+        super if @pattern.is_a?(Regexp)
       end
 
       def switch_name
@@ -182,8 +182,8 @@ class XOptionParser < ::OptionParser
     class SimpleArgument < SummarizeArgument
       attr_reader :ranges
 
-      def initialize(*args)
-        super(*args)
+      def initialize(*)
+        super
         @ranges = arg.scan(/\[\s*(.*?)\s*\]|(\S+)/).map do |opt, req|
           (opt ? 0 : 1)..((opt || req).end_with?('...') ? nil : 1)
         end
