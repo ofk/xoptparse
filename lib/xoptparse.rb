@@ -67,7 +67,7 @@ class XOptionParser < ::OptionParser
     return sw if sw0.short || sw0.long
 
     sw0 = fix_arg_switch(sw0)
-    long = sw0.arg.scan(/(?:\[\s*(.*?)\s*\]|(\S+))/).flatten.compact
+    long = sw0.arg_parameters.map(&:first)
     [sw0, nil, long]
   end
 
@@ -160,9 +160,22 @@ class XOptionParser < ::OptionParser
     class SummarizeArgument < self
       undef_method :add_banner
 
+      attr_reader :arg_parameters
+
+      def initialize(*)
+        super
+        @arg_parameters = arg.scan(/\[\s*(.*?)\s*\]|(\S+)/).map do |opt, req|
+          name = opt || req
+          [name.sub(/\s*\.\.\.$/, ''), opt ? :opt : :req, name.end_with?('...') ? :rest : nil]
+        end
+      end
+
       def summarize(*)
         original_arg = arg
-        @short = arg.scan(/\[\s*.*?\s*\]|\S+/)
+        @short = arg_parameters.map do |name, type, rest|
+          var = "#{name}#{rest ? '...' : ''}"
+          type == :req ? var : "[#{var}]"
+        end
         @arg = nil
         res = super
         @arg = original_arg
@@ -175,7 +188,7 @@ class XOptionParser < ::OptionParser
       end
 
       def switch_name
-        arg.scan(/\[\s*(.*?)\s*\]|(\S+)/).first.compact.first.sub(/\.\.\.$/, '')
+        arg_parameters.first.first
       end
     end
 
@@ -184,8 +197,8 @@ class XOptionParser < ::OptionParser
 
       def initialize(*)
         super
-        @ranges = arg.scan(/\[\s*(.*?)\s*\]|(\S+)/).map do |opt, req|
-          (opt ? 0 : 1)..((opt || req).end_with?('...') ? nil : 1)
+        @ranges = arg_parameters.map do |_name, type, rest|
+          (type == :req ? 1 : 0)..(rest == :rest ? nil : 1)
         end
       end
 
