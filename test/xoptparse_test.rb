@@ -201,7 +201,7 @@ class XOptionParserTest < Minitest::Test
     opt = create_option_parser.call(res)
     argv = opt.parse!(%w[--v3 a b])
     assert { argv.empty? }
-    assert { res == { v1: 'b', v2: nil, v3: 'a' } }
+    assert { res == { v1: 'b', v3: 'a' } }
 
     res = {}
     opt = create_option_parser.call(res)
@@ -225,7 +225,7 @@ class XOptionParserTest < Minitest::Test
     opt = create_rest_option_parser.call(res)
     argv = opt.parse!(%w[--v4 a --v3 b c])
     assert { argv.empty? }
-    assert { res == { v1: 'c', v2: nil, v3: %w[b], v4: 'a' } }
+    assert { res == { v1: 'c', v3: %w[b], v4: 'a' } }
 
     res = {}
     opt = create_rest_option_parser.call(res)
@@ -299,25 +299,25 @@ class XOptionParserTest < Minitest::Test
     opt = create_option_parser.call(res)
     args = opt.parse!(%w[hoge])
     assert { args.empty? }
-    assert { res == { c: :root, v1: 'hoge', v2: nil } }
+    assert { res == { c: :root, v1: 'hoge' } }
 
     res = {}
     opt = create_option_parser.call(res)
     args = opt.parse!(%w[hoge foo])
     assert { args.empty? }
-    assert { res == { c: :foo, v1: 'hoge', v2: nil, v3: nil } }
+    assert { res == { c: :foo, v1: 'hoge' } }
 
     res = {}
     opt = create_option_parser.call(res)
     args = opt.parse!(%w[hoge foo bar])
     assert { args.empty? }
-    assert { res == { c: :foo, v1: 'hoge', v2: nil, v3: 'bar' } }
+    assert { res == { c: :foo, v1: 'hoge', v3: 'bar' } }
 
     res = {}
     opt = create_option_parser.call(res)
     args = opt.parse!(%w[hoge foo bar baz])
     assert { args == %w[baz] }
-    assert { res == { c: :foo, v1: 'hoge', v2: nil, v3: 'bar' } }
+    assert { res == { c: :foo, v1: 'hoge', v3: 'bar' } }
   end
 
   def test_info

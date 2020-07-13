@@ -85,24 +85,30 @@ class XOptionParser < ::OptionParser
 
     arg_sws.each do |sw|
       conv = proc { |v| sw.send(:conv_arg, *sw.send(:parse_arg, v))[2] }
+      callable = false
       a = sw.ranges.map do |r|
         if r.end.nil?
           rest_size = r.begin + opt_count
           req_count -= r.begin
           opt_count = 0
+          callable = true if rest_size.positive?
           argv.slice!(0...rest_size).map(&conv)
         elsif r.begin.zero?
-          next conv.call(nil) if opt_count.zero?
+          next nil if opt_count.zero?
 
           opt_count -= 1
+          callable = true
           conv.call(argv.shift)
         else
           req_count -= 1
+          callable = true
           conv.call(argv.shift)
         end
       end
-      val = sw.block.call(*a)
-      setter&.call(sw.switch_name, val)
+      if callable
+        val = sw.block.call(*a)
+        setter&.call(sw.switch_name, val)
+      end
     end
 
     argv
