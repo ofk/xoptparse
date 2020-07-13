@@ -264,4 +264,31 @@ class XOptionParserTest < Minitest::Test
     assert { args == %w[baz] }
     assert { res == { c: :foo, v1: 'hoge', v2: nil, v3: 'bar' } }
   end
+
+  def test_info
+    res = {}
+    XOptionParser.new do |o|
+      o.on('--foo-bar VAL', &:itself)
+      o.on('--baz_qux VAL', &:itself)
+      o.on('hoge-fuga', &:itself)
+      o.on('[piyo_hogera]', &:itself)
+      o.on('foo...', &:itself)
+      o.on('bar baz') { |*vals| vals }
+    end.parse!(%w[--foo-bar 1 --baz_qux 2 hoge-fuga piyo_hogera foo bar baz], into: res)
+    assert { res == { 'foo-bar': '1', baz_qux: '2', 'hoge-fuga': 'hoge-fuga', piyo_hogera: 'piyo_hogera', foo: ['foo'], bar: %w[bar baz] } }
+
+    res = {}
+    XOptionParser.new do |o|
+      o.on('val', &:itself)
+      o.command('foo') do |o2|
+        o2.on('--bar', &:itself)
+        o2.on('hoge', &:itself)
+      end
+      o.command('baz') do |o2|
+        o2.on('--qux', &:itself)
+        o2.on('fuga', &:itself)
+      end
+    end.parse!(%w[str foo --bar baz], into: res)
+    assert { res == { val: 'str', foo: { bar: true, hoge: 'baz' } } }
+  end
 end

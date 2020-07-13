@@ -71,7 +71,7 @@ class XOptionParser < ::OptionParser
     [sw0, nil, long]
   end
 
-  def parse_arguments(argv) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+  def parse_arguments(argv, setter = nil) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
     arg_sws = select { |sw| sw.is_a?(Switch::SimpleArgument) }
     return argv if arg_sws.empty?
 
@@ -101,34 +101,38 @@ class XOptionParser < ::OptionParser
           conv.call(argv.shift)
         end
       end
-      sw.block.call(*a)
+      val = sw.block.call(*a)
+      setter&.call(sw.switch_name, val)
     end
 
     argv
   end
   private :parse_arguments
 
-  def parse_in_order(*args, &nonopt)
-    argv = []
+  def parse_in_order(argv = default_argv, setter = nil, &nonopt)
+    nonopts = []
     rest = if nonopt
-             super(*args, &argv.method(:<<))
+             super(argv, setter, &nonopts.method(:<<))
            else
-             argv = super(*args)
+             nonopts = super(argv, setter)
            end
-    parse_arguments(argv).map(&nonopt)
+    parse_arguments(nonopts, setter).map(&nonopt)
     rest
   end
   private :parse_in_order
 
-  def order!(*args, **kwargs)
-    return super(*args, **kwargs) if @commands.empty?
+  def order!(*args, into: nil, **kwargs) # rubocop:disable Metrics/AbcSize
+    return super(*args, into: into, **kwargs) if @commands.empty?
 
-    argv = super(*args, **kwargs, &nil)
+    argv = super(*args, into: into, **kwargs, &nil)
     return argv if argv.empty?
 
     name = argv.shift
     sw = @commands[name]
-    return sw.block.call.send(block_given? ? :permute! : :order!, *args, **kwargs) if sw
+    if sw
+      into = into[name.to_sym] = {} if into
+      return sw.block.call.send(block_given? ? :permute! : :order!, *args, into: into, **kwargs)
+    end
 
     puts "#{program_name}:" \
          "'#{name}' is not a #{program_name} command. See '#{program_name} --help'."
@@ -163,6 +167,10 @@ class XOptionParser < ::OptionParser
 
       def match_nonswitch?(*args)
         super(*args) if @pattern.is_a?(Regexp)
+      end
+
+      def switch_name
+        arg.scan(/\[\s*(.*?)\s*\]|(\S+)/).first.compact.first.sub(/\.\.\.$/, '')
       end
     end
 
