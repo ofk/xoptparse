@@ -179,6 +179,61 @@ class XOptionParserTest < Minitest::Test
     assert { res == { v1: 'a', v2: 'b', v3: %w[c d e], v4: 'f' } }
   end
 
+  def test_arguments_by_name
+    create_option_parser = proc do |res|
+      XOptionParser.new do |o|
+        o.on('v1') { |v| res[:v1] = v }
+        o.on('[v2]') { |v| res[:v2] = v }
+        o.on('v3') { |v| res[:v3] = v }
+      end
+    end
+
+    create_rest_option_parser = proc do |res|
+      XOptionParser.new do |o|
+        o.on('v1') { |v| res[:v1] = v }
+        o.on('[v2]') { |v| res[:v2] = v }
+        o.on('v3...') { |v| res[:v3] = v }
+        o.on('v4') { |v| res[:v4] = v }
+      end
+    end
+
+    res = {}
+    opt = create_option_parser.call(res)
+    argv = opt.parse!(%w[--v3 a b])
+    assert { argv.empty? }
+    assert { res == { v1: 'b', v2: nil, v3: 'a' } }
+
+    res = {}
+    opt = create_option_parser.call(res)
+    argv = opt.parse!(%w[--v3 a --v1 b c])
+    assert { argv.empty? }
+    assert { res == { v1: 'b', v2: 'c', v3: 'a' } }
+
+    res = {}
+    opt = create_option_parser.call(res)
+    argv = opt.parse!(%w[--v3 a --v2 b c])
+    assert { argv.empty? }
+    assert { res == { v1: 'c', v2: 'b', v3: 'a' } }
+
+    res = {}
+    opt = create_option_parser.call(res)
+    argv = opt.parse!(%w[--v3 a --v1 b --v2 c])
+    assert { argv.empty? }
+    assert { res == { v1: 'b', v2: 'c', v3: 'a' } }
+
+    res = {}
+    opt = create_rest_option_parser.call(res)
+    argv = opt.parse!(%w[--v4 a --v3 b c])
+    assert { argv.empty? }
+    assert { res == { v1: 'c', v2: nil, v3: %w[b], v4: 'a' } }
+
+    res = {}
+    opt = create_rest_option_parser.call(res)
+    argv = opt.parse!(%w[--v4 a --v1 b --v2 c d e f])
+    assert { argv.empty? }
+    assert { res == { v1: 'b', v2: 'c', v3: %w[d e f], v4: 'a' } }
+  end
+
   def test_typed_arguments
     res = {}
     opt = XOptionParser.new do |o|

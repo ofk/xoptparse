@@ -71,8 +71,8 @@ class XOptionParser < ::OptionParser
     [sw0, nil, long]
   end
 
-  def parse_arguments(argv, setter = nil) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
-    arg_sws = select { |sw| sw.is_a?(Switch::SimpleArgument) }
+  def parse_arguments(argv, setter = nil, opts = {}) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+    arg_sws = select { |sw| sw.is_a?(Switch::SimpleArgument) && !opts.include?(sw.switch_name) }
     return argv if arg_sws.empty?
 
     sws_ranges = arg_sws.map(&:ranges).flatten(1)
@@ -111,12 +111,17 @@ class XOptionParser < ::OptionParser
 
   def parse_in_order(argv = default_argv, setter = nil, &nonopt)
     nonopts = []
+    opts = {}
+    opts_setter = proc do |name, val|
+      opts[name] = true
+      setter&.call(name, val)
+    end
     rest = if nonopt
-             super(argv, setter, &nonopts.method(:<<))
+             super(argv, opts_setter, &nonopts.method(:<<))
            else
-             nonopts = super(argv, setter)
+             nonopts = super(argv, opts_setter)
            end
-    parse_arguments(nonopts, setter).map(&nonopt)
+    parse_arguments(nonopts, setter, opts).map(&nonopt)
     rest
   end
   private :parse_in_order
@@ -186,6 +191,23 @@ class XOptionParser < ::OptionParser
 
       def add_banner(to)
         to << " #{arg}"
+      end
+
+      def parse(arg, argv)
+        case ranges.size
+        when 0
+          super(arg, argv)
+        when 1
+          unless arg
+            raise XOptionParser::MissingArgument if argv.empty?
+
+            arg = argv.shift
+          end
+          arg = [arg] if ranges.first.end.nil?
+          conv_arg(*parse_arg(arg, &method(:raise)))
+        else
+          raise XOptionParser::InvalidOption
+        end
       end
     end
   end
