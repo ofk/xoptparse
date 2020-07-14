@@ -346,4 +346,57 @@ class XOptionParserTest < Minitest::Test
     end.parse!(%w[str foo --bar baz], into: res)
     assert { res == { val: 'str', foo: { bar: true, hoge: 'baz' } } }
   end
+
+  def test_flag
+    create_option_parser = proc do
+      XOptionParser.new do |o|
+        o.on('--[no-]flag [FLAG]', &:itself)
+        o.on('--[no-]good [FLAG]', TrueClass, &:itself)
+        o.on('--[no-]bad [FLAG]', FalseClass, &:itself)
+        o.on('-x', '--[no-]flag_two [FLAG]', &:itself)
+        o.on('-y', '--[no-]good_two [FLAG]', TrueClass, &:itself)
+        o.on('-z', '--[no-]bad_two [FLAG]', FalseClass, &:itself)
+      end
+    end
+
+    params = {}
+    args = create_option_parser.call.parse!([], into: params)
+    assert { args.empty? }
+    assert { params == {} }
+
+    params = {}
+    args = create_option_parser.call.parse!(%w[--flag --good --bad --flag-two --good-two --bad-two], into: params)
+    assert { args.empty? }
+    assert { params == { flag: true, good: true, bad: false, flag_two: true, good_two: true, bad_two: false } }
+
+    params = {}
+    args = create_option_parser.call.parse!(%w[--flag yes --good yes --bad yes --flag-two yes --good-two yes --bad-two yes], into: params)
+    assert { args.empty? }
+    assert { params == { flag: 'yes', good: true, bad: true, flag_two: 'yes', good_two: true, bad_two: true } }
+
+    params = {}
+    args = create_option_parser.call.parse!(%w[--flag no --good no --bad no --flag-two no --good-two no --bad-two no], into: params)
+    assert { args.empty? }
+    assert { params == { flag: 'no', good: false, bad: false, flag_two: 'no', good_two: false, bad_two: false } }
+
+    params = {}
+    args = create_option_parser.call.parse!(%w[--no-flag --no-good --no-bad --no-flag-two --no-good-two --no-bad-two], into: params)
+    assert { args.empty? }
+    assert { params == { flag: false, good: false, bad: false, flag_two: false, good_two: false, bad_two: false } }
+
+    params = {}
+    args = create_option_parser.call.parse!(%w[-x -y -z], into: params)
+    assert { args.empty? }
+    assert { params == { flag_two: true, good_two: true, bad_two: false } }
+
+    params = {}
+    args = create_option_parser.call.parse!(%w[-x yes -y yes -z yes], into: params)
+    assert { args.empty? }
+    assert { params == { flag_two: 'yes', good_two: true, bad_two: true } }
+
+    params = {}
+    args = create_option_parser.call.parse!(%w[-x no -y no -z no], into: params)
+    assert { args.empty? }
+    assert { params == { flag_two: 'no', good_two: false, bad_two: false } }
+  end
 end

@@ -55,18 +55,24 @@ class XOptionParser < ::OptionParser
   end
   private :search_arg_switch_atype
 
-  def fix_arg_switch(sw0)
-    pattern, conv = search_arg_switch_atype(sw0)
-    Switch::SimpleArgument.new(pattern, conv, nil, nil, sw0.desc[0], sw0.desc[1..], sw0.block)
+  def fix_arg_switch(sw0) # rubocop:disable Metrics/AbcSize
+    if !(sw0.short || sw0.long)
+      pattern, conv = search_arg_switch_atype(sw0)
+      Switch::SimpleArgument.new(pattern, conv, nil, nil, sw0.desc[0], sw0.desc[1..], sw0.block)
+    elsif sw0.is_a?(Switch::PlacedArgument) && sw0.long.size == 1 && /^--\[no-\]/ =~ sw0.long.first
+      args = [sw0.pattern, sw0.conv, sw0.short, sw0.long, sw0.arg, sw0.desc, sw0.block]
+      Switch::FlagArgument.new(*args)
+    else
+      sw0
+    end
   end
   private :fix_arg_switch
 
   def make_switch(opts, block = nil)
     sw = super(opts, block || proc {})
-    sw0 = sw[0]
+    sw0 = sw[0] = fix_arg_switch(sw[0])
     return sw if sw0.short || sw0.long
 
-    sw0 = fix_arg_switch(sw0)
     long = sw0.arg_parameters.map(&:first)
     [sw0, nil, long]
   end
@@ -226,6 +232,16 @@ class XOptionParser < ::OptionParser
           conv_arg(*parse_arg(arg, &method(:raise)))
         else
           raise XOptionParser::InvalidOption
+        end
+      end
+    end
+
+    class FlagArgument < PlacedArgument
+      def parse(arg, argv, &error)
+        if !arg && (argv.empty? || /\A-/ =~ argv[0])
+          conv_arg(arg)
+        else
+          super(arg, argv, &error)
         end
       end
     end
