@@ -52,7 +52,7 @@ DEPENDENCIES
   minitest-power_assert
   minitest-reporters
   rake (~> 12.3.3)
-  rubocop (= 0.84.0)
+  rubocop
   simplecov
   xoptparse!
 
