@@ -118,6 +118,9 @@ class XOptionParserTest < Minitest::Test
     argv = opt.parse!(%w[bar])
     assert { argv.empty? }
     assert { res == { c: :bar, o: nil } }
+
+    opt = create_option_parser.call({})
+    assert_raises(OptionParser::InvalidOption) { opt.parse!(%w[--bar]) }
   end
 
   def test_arguments

@@ -202,6 +202,10 @@ class XOptionParser < ::OptionParser
       def switch_name
         arg_parameters.first.first
       end
+
+      def parse(_arg, _argv)
+        raise XOptionParser::InvalidOption
+      end
     end
 
     class SimpleArgument < SummarizeArgument
@@ -218,10 +222,11 @@ class XOptionParser < ::OptionParser
         to << " #{arg}"
       end
 
-      def parse(arg, argv)
+      def parse(arg, argv) # rubocop:disable Metrics/CyclomaticComplexity
         case ranges.size
         when 0
-          super(arg, argv)
+          yield(NeedlessArgument, arg) if arg
+          conv_arg(arg)
         when 1
           unless arg
             raise XOptionParser::MissingArgument if argv.empty?
@@ -231,7 +236,7 @@ class XOptionParser < ::OptionParser
           arg = [arg] if ranges.first.end.nil?
           conv_arg(*parse_arg(arg, &method(:raise)))
         else
-          raise XOptionParser::InvalidOption
+          super(arg, argv)
         end
       end
     end
