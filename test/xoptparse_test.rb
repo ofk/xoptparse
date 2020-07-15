@@ -279,48 +279,70 @@ class XOptionParserTest < Minitest::Test
     create_option_parser = proc do |res|
       XOptionParser.new do |o|
         res[:c] = :root
-        o.on('v1') { |v| res[:v1] = v }
-        o.on('[v2]') { |v| res[:v2] = v }
         o.command('foo') do |o2|
           res[:c] = :foo
-          o2.on('[v3]') { |v| res[:v3] = v }
+          o2.on('[v1]') { |v| res[:v1] = v }
+        end
+        o.on('v2') { |v| res[:v2] = v }
+        o.on('[v3]') { |v| res[:v3] = v }
+        o.command('bar') do |o2|
+          res[:c] = :bar
+          o2.on('[v4]') { |v| res[:v4] = v }
         end
       end
     end
 
     opt = create_option_parser.call({})
     opt.program_name = 'test'
-    assert { opt.help == "Usage: test v1 [v2] <command>\n    v1\n    [v2]\n    foo\n" }
+    assert { opt.help == "Usage: test v2 [v3] <command>\n    foo\n    v2\n    [v3]\n    bar\n" }
 
     res = {}
     opt = create_option_parser.call(res)
     args = opt.parse!(%w[hoge piyo])
     assert { args.empty? }
-    assert { res == { c: :root, v1: 'hoge', v2: 'piyo' } }
+    assert { res == { c: :root, v2: 'hoge', v3: 'piyo' } }
 
     res = {}
     opt = create_option_parser.call(res)
     args = opt.parse!(%w[hoge])
     assert { args.empty? }
-    assert { res == { c: :root, v1: 'hoge' } }
+    assert { res == { c: :root, v2: 'hoge' } }
 
     res = {}
     opt = create_option_parser.call(res)
-    args = opt.parse!(%w[hoge foo])
+    args = opt.parse!(%w[hoge bar])
     assert { args.empty? }
-    assert { res == { c: :foo, v1: 'hoge' } }
+    assert { res == { c: :bar, v2: 'hoge' } }
 
     res = {}
     opt = create_option_parser.call(res)
-    args = opt.parse!(%w[hoge foo bar])
+    args = opt.parse!(%w[hoge bar baz])
     assert { args.empty? }
-    assert { res == { c: :foo, v1: 'hoge', v3: 'bar' } }
+    assert { res == { c: :bar, v2: 'hoge', v4: 'baz' } }
 
     res = {}
     opt = create_option_parser.call(res)
-    args = opt.parse!(%w[hoge foo bar baz])
+    args = opt.parse!(%w[hoge bar baz qux])
+    assert { args == %w[qux] }
+    assert { res == { c: :bar, v2: 'hoge', v4: 'baz' } }
+
+    res = {}
+    opt = create_option_parser.call(res)
+    args = opt.parse!(%w[foo])
+    assert { args.empty? }
+    assert { res == { c: :foo } }
+
+    res = {}
+    opt = create_option_parser.call(res)
+    args = opt.parse!(%w[foo bar])
+    assert { args.empty? }
+    assert { res == { c: :foo, v1: 'bar' } }
+
+    res = {}
+    opt = create_option_parser.call(res)
+    args = opt.parse!(%w[foo bar baz])
     assert { args == %w[baz] }
-    assert { res == { c: :foo, v1: 'hoge', v3: 'bar' } }
+    assert { res == { c: :foo, v1: 'bar' } }
   end
 
   def test_info

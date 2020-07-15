@@ -78,42 +78,48 @@ class XOptionParser < ::OptionParser
   end
 
   def parse_arguments(argv, setter = nil, opts = {}) # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
-    arg_sws = select { |sw| sw.is_a?(Switch::SimpleArgument) && !opts.include?(sw.switch_name) }
+    arg_sws = select { |sw| sw.is_a?(Switch::SummarizeArgument) && !opts.include?(sw.switch_name) }
     return argv if arg_sws.empty?
 
     sws_ranges = arg_sws.map(&:ranges).flatten(1)
     req_count = sws_ranges.sum(&:begin)
-    raise MissingArgument, argv.join(' ') if argv.size < req_count
-
     opt_count = sws_ranges.sum(&:size) - sws_ranges.size
     opt_index = argv[req_count...].index { |arg| @commands.include?(arg) } unless @commands.empty?
     opt_count = [opt_count, opt_index || Float::INFINITY, argv.size - req_count].min
 
-    arg_sws.each do |sw|
-      conv = proc { |v| sw.send(:conv_arg, *sw.send(:parse_arg, v))[2] }
-      callable = false
-      a = sw.ranges.map do |r|
-        if r.end.nil?
-          rest_size = r.begin + opt_count
-          req_count -= r.begin
-          opt_count = 0
-          callable = true if rest_size.positive?
-          argv.slice!(0...rest_size).map(&conv)
-        elsif r.begin.zero?
-          next nil if opt_count.zero?
-
-          opt_count -= 1
+    arg_sws.each_with_index do |sw, i|
+      if sw.is_a?(Switch::SimpleArgument)
+        callable = false
+        conv = proc do |v|
           callable = true
-          conv.call(argv.shift)
-        else
-          req_count -= 1
-          callable = true
-          conv.call(argv.shift)
+          sw.send(:conv_arg, *sw.send(:parse_arg, v))[2]
         end
-      end
-      if callable
-        val = sw.block.call(*a)
-        setter&.call(sw.switch_name, val)
+        a = sw.ranges.map do |r|
+          raise MissingArgument if r.begin.positive? && argv.empty?
+
+          if r.end.nil?
+            rest_size = r.begin + opt_count
+            req_count -= r.begin
+            opt_count = 0
+            argv.slice!(0...rest_size).map(&conv)
+          elsif r.begin.positive?
+            req_count -= 1
+            conv.call(argv.shift)
+          elsif opt_count.positive?
+            opt_count -= 1
+            conv.call(argv.shift)
+          end
+        end
+        if callable
+          val = sw.block.call(*a)
+          setter&.call(sw.switch_name, val)
+        end
+      elsif sw.arg == argv.first
+        argv.shift
+        @command_switch = sw
+        break
+      elsif !argv.empty? && i == arg_sws.size - 1
+        raise MissingArgument
       end
     end
 
@@ -138,22 +144,15 @@ class XOptionParser < ::OptionParser
   end
   private :parse_in_order
 
-  def order!(*args, into: nil, **kwargs) # rubocop:disable Metrics/AbcSize
+  def order!(*args, into: nil, **kwargs)
     return super(*args, into: into, **kwargs) if @commands.empty?
 
+    @command_switch = nil
     argv = super(*args, into: into, **kwargs, &nil)
-    return argv if argv.empty?
+    return argv unless @command_switch
 
-    name = argv.shift
-    sw = @commands[name]
-    if sw
-      into = into[name.to_sym] = {} if into
-      return sw.block.call.send(block_given? ? :permute! : :order!, *args, into: into, **kwargs)
-    end
-
-    puts "#{program_name}:" \
-         "'#{name}' is not a #{program_name} command. See '#{program_name} --help'."
-    exit
+    into = into[@command_switch.arg.to_sym] = {} if into
+    @command_switch.block.call.send(block_given? ? :permute! : :order!, *args, into: into, **kwargs)
   end
 
   def command(name, desc = nil, *args, &block)
@@ -172,10 +171,12 @@ class XOptionParser < ::OptionParser
     class SummarizeArgument < self
       undef_method :add_banner
 
+      attr_reader :ranges
       attr_reader :arg_parameters
 
       def initialize(*)
         super
+        @ranges = []
         @arg_parameters = arg.scan(/\[\s*(.*?)\s*\]|(\S+)/).map do |opt, req|
           name = opt || req
           [name.sub(/\s*\.\.\.$/, ''), opt ? :opt : :req, name.end_with?('...') ? :rest : nil]
@@ -209,8 +210,6 @@ class XOptionParser < ::OptionParser
     end
 
     class SimpleArgument < SummarizeArgument
-      attr_reader :ranges
-
       def initialize(*)
         super
         @ranges = arg_parameters.map do |_name, type, rest|
