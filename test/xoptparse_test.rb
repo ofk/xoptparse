@@ -131,7 +131,7 @@ class XOptionParserTest < Minitest::Test
         o.command('foo') do |o2|
           res[:c] = :foo
           o2.on('-o') { res[:o] = :foo }
-          o2.command('hoge') do |o3|
+          o2.command('hoge_hoge') do |o3|
             res[:c] = :hoge
             o3.on('-o') { res[:o] = :hoge }
           end
@@ -168,17 +168,17 @@ class XOptionParserTest < Minitest::Test
     assert { res == { c: :foo, o: :foo } }
 
     opt, res = create_option_parser.call
-    argv = opt.parse!(%w[foo -o hoge])
+    argv = opt.parse!(%w[foo -o hoge_hoge])
     assert { argv.empty? }
     assert { res == { c: :hoge, o: :foo } }
 
     opt, res = create_option_parser.call
-    argv = opt.parse!(%w[foo hoge -o])
+    argv = opt.parse!(%w[foo hoge-hoge -o])
     assert { argv.empty? }
     assert { res == { c: :hoge, o: :hoge } }
 
     opt, res = create_option_parser.call
-    argv = opt.parse!(%w[foo hoge fuga])
+    argv = opt.parse!(%w[foo hogeHoge fuga])
     assert { argv == %w[fuga] }
     assert { res == { c: :hoge, o: nil } }
 

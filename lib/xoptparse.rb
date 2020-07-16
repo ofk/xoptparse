@@ -114,7 +114,7 @@ class XOptionParser < ::OptionParser
           val = sw.block.call(*a)
           setter&.call(sw.switch_name, val)
         end
-      elsif sw.arg == argv.first
+      elsif sw.pattern =~ argv.first
         argv.shift
         @command_switch = sw
         break
@@ -156,14 +156,16 @@ class XOptionParser < ::OptionParser
   end
 
   def command(name, desc = nil, *args, &block)
-    sw0 = Switch::SummarizeArgument.new(nil, nil, nil, nil, name.to_s, desc ? [desc] : [], nil) do
+    name = name.to_s
+    pattern = /^#{name.gsub('_', '[-_]?')}$/i
+    sw0 = Switch::SummarizeArgument.new(pattern, nil, nil, nil, name, desc ? [desc] : [], nil) do
       self.class.new(desc, *args) do |opt|
         opt.program_name = "#{program_name} #{name}"
         block&.call(opt)
       end
     end
     top.append(sw0, nil, [sw0.arg])
-    @commands[name.to_s] = sw0
+    @commands[name] = sw0
     nil
   end
 
