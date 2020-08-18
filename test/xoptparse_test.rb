@@ -122,6 +122,40 @@ class XOptionParserTest < Minitest::Test
     assert { params == { flag_two: 'no', good_two: false, bad_two: false } }
   end
 
+  def test_flag_and_arg
+    create_option_parser = proc do
+      XOptionParser.new do |o|
+        o.on('[arg]', &:itself)
+        o.on('--[no-]flag [FLAG]', TrueClass, &:itself)
+      end
+    end
+
+    params = {}
+    args = create_option_parser.call.parse!([], into: params)
+    assert { args.empty? }
+    assert { params == {} }
+
+    params = {}
+    args = create_option_parser.call.parse!(%w[--arg val --flag yes], into: params)
+    assert { args.empty? }
+    assert { params == { arg: 'val', flag: true } }
+
+    params = {}
+    args = create_option_parser.call.parse!(%w[--flag yes], into: params)
+    assert { args.empty? }
+    assert { params == { flag: true } }
+
+    params = {}
+    args = create_option_parser.call.parse!(%w[--flag yes val], into: params)
+    assert { args.empty? }
+    assert { params == { arg: 'val', flag: true } }
+
+    params = {}
+    args = create_option_parser.call.parse!(%w[--flag val], into: params)
+    assert { args.empty? }
+    assert { params == { arg: 'val', flag: true } }
+  end
+
   def test_sub_command
     create_option_parser = proc do |res = {}|
       [XOptionParser.new do |o|

@@ -244,11 +244,11 @@ class XOptionParser < ::OptionParser
 
     class FlagArgument < PlacedArgument
       def parse(arg, argv, &error)
-        if !arg && (argv.empty? || /\A-/ =~ argv[0])
-          conv_arg(arg)
-        else
-          super(arg, argv, &error)
+        super(arg, argv, &error).tap do |val|
+          raise OptionParser::InvalidArgument if val[0].nil? && val[2].nil?
         end
+      rescue OptionParser::InvalidArgument
+        conv_arg(arg)
       end
     end
   end
