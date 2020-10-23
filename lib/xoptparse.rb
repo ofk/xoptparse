@@ -199,7 +199,7 @@ class XOptionParser < ::OptionParser
       end
 
       def match_nonswitch?(*)
-        super if @pattern.is_a?(Regexp)
+        nil
       end
 
       def switch_name
